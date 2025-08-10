@@ -1,6 +1,6 @@
 # Overview
 
-This is a Discord bot designed for Dungeons & Dragons gameplay and server moderation. The bot provides essential D&D features like dice rolling, initiative tracking, and character management, along with moderation tools and music playback capabilities. It's specifically designed to run 24/7 on Replit using a Flask web server to maintain uptime.
+This is an advanced Discord bot designed for comprehensive Dungeons & Dragons gameplay, campaign management, and server moderation. The bot provides extensive D&D features including dice rolling, initiative tracking, character management, DM tools for combat management, campaign note-taking, quest tracking, inventory management, along with moderation tools and music playback capabilities. It's specifically designed to run 24/7 on Replit using a Flask web server to maintain uptime.
 
 # User Preferences
 
@@ -14,6 +14,9 @@ The bot is built using the discord.py library with slash commands (app_commands)
 ## Command Organization
 Commands are organized into separate modules by functionality:
 - **D&D Commands**: Dice rolling, initiative tracking, character management
+- **DM Commands**: HP management, damage/healing, combat tracking, party status (DM-only)
+- **Campaign Management**: Note-taking, quest tracking, location tracking, session management
+- **Inventory System**: Party inventory management with item tracking
 - **Moderation Commands**: User banning, muting/unmuting with role-based permissions
 - **Music Commands**: YouTube audio playback using youtube-dl and FFmpeg
 

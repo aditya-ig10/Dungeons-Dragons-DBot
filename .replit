@@ -22,6 +22,10 @@ args = "Discord Bot"
 task = "workflow.run"
 args = "discord_bot_test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Enhanced Discord Bot"
+
 [[workflows.workflow]]
 name = "Discord Bot"
 author = "agent"
@@ -41,6 +45,22 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pip install discord.py python-dotenv flask youtube-dl ffmpeg-python && python main.py"
+
+[[workflows.workflow]]
+name = "Enhanced Discord Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 8000

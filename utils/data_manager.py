@@ -19,6 +19,11 @@ class DataManager:
             self._data['guilds'][guild_id] = {
                 'characters': {},  # name -> character_data
                 'initiative': [],  # [(name, roll), ...]
+                'notes': [],      # campaign notes
+                'quests': [],     # quest log
+                'inventory': [],  # party inventory
+                'location': None, # current location
+                'session': None,  # current session
             }
     
     # Initiative tracking methods
@@ -137,6 +142,144 @@ class DataManager:
         with self._lock:
             if guild_id in self._data['guilds']:
                 del self._data['guilds'][guild_id]
+    
+    # Note-taking methods
+    def add_note(self, guild_id: int, author_id: int, title: str, content: str):
+        """Add campaign note"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            note = {
+                'id': len(guild_data['notes']) + 1,
+                'title': title,
+                'content': content,
+                'author_id': author_id,
+                'created_at': self._get_timestamp()
+            }
+            guild_data['notes'].append(note)
+    
+    def get_all_notes(self, guild_id: int) -> List[Dict]:
+        """Get all campaign notes"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            return self._data['guilds'][guild_id]['notes'].copy()
+    
+    # Quest management methods
+    def add_quest(self, guild_id: int, author_id: int, title: str, description: str, status: str):
+        """Add or update quest"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            # Check if quest exists (by title)
+            for quest in guild_data['quests']:
+                if quest['title'].lower() == title.lower():
+                    quest['description'] = description
+                    quest['status'] = status
+                    quest['updated_at'] = self._get_timestamp()
+                    return
+            
+            # Add new quest
+            quest = {
+                'id': len(guild_data['quests']) + 1,
+                'title': title,
+                'description': description,
+                'status': status,
+                'author_id': author_id,
+                'created_at': self._get_timestamp(),
+                'updated_at': self._get_timestamp()
+            }
+            guild_data['quests'].append(quest)
+    
+    def get_all_quests(self, guild_id: int) -> List[Dict]:
+        """Get all quests"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            return self._data['guilds'][guild_id]['quests'].copy()
+    
+    # Location management
+    def set_location(self, guild_id: int, location: str, updater_id: int):
+        """Set party location"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            guild_data['location'] = {
+                'name': location,
+                'updated_by': updater_id,
+                'updated_at': self._get_timestamp()
+            }
+    
+    def get_location(self, guild_id: int) -> Optional[Dict]:
+        """Get current location"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            return self._data['guilds'][guild_id]['location']
+    
+    # Session management
+    def start_session(self, guild_id: int, dm_id: int, session_name: str):
+        """Start new session"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            guild_data['session'] = {
+                'name': session_name,
+                'dm_id': dm_id,
+                'started_at': self._get_timestamp(),
+                'notes': []
+            }
+    
+    def get_current_session(self, guild_id: int) -> Optional[Dict]:
+        """Get current session"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            return self._data['guilds'][guild_id]['session']
+    
+    # Inventory management
+    def add_inventory_item(self, guild_id: int, added_by: int, name: str, quantity: int, description: str = None):
+        """Add item to inventory"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            # Check if item exists
+            for item in guild_data['inventory']:
+                if item['name'].lower() == name.lower():
+                    item['quantity'] += quantity
+                    return
+            
+            # Add new item
+            item = {
+                'name': name,
+                'quantity': quantity,
+                'description': description,
+                'added_by': added_by,
+                'added_at': self._get_timestamp()
+            }
+            guild_data['inventory'].append(item)
+    
+    def get_inventory(self, guild_id: int) -> List[Dict]:
+        """Get party inventory"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            return self._data['guilds'][guild_id]['inventory'].copy()
+    
+    def remove_inventory_item(self, guild_id: int, name: str, quantity: int = 1) -> bool:
+        """Remove item from inventory"""
+        with self._lock:
+            self._ensure_guild(guild_id)
+            guild_data = self._data['guilds'][guild_id]
+            
+            for item in guild_data['inventory']:
+                if item['name'].lower() == name.lower():
+                    if item['quantity'] <= quantity:
+                        guild_data['inventory'].remove(item)
+                    else:
+                        item['quantity'] -= quantity
+                    return True
+            return False
 
 # Example usage
 if __name__ == "__main__":

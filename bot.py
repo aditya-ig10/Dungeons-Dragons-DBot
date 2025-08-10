@@ -9,6 +9,8 @@ import asyncio
 from commands.dnd_commands import setup_dnd_commands
 from commands.moderation_commands import setup_moderation_commands
 from commands.music_commands import setup_music_commands
+from commands.dm_commands import setup_dm_commands
+from commands.notes_commands import setup_notes_commands
 from utils.data_manager import DataManager
 
 # Load environment variables
@@ -35,13 +37,15 @@ class DnDBot(commands.Bot):
         await setup_dnd_commands(self)
         await setup_moderation_commands(self)
         await setup_music_commands(self)
+        await setup_dm_commands(self)
+        await setup_notes_commands(self)
         
         # Add help command
         @self.tree.command(name='help', description='Show all available commands')
         async def help_command(interaction: discord.Interaction):
             embed = discord.Embed(
                 title="🎲 D&D Bot Commands",
-                description="Here are all available commands:",
+                description="Your complete D&D companion bot!",
                 color=0x7289DA
             )
             
@@ -54,6 +58,43 @@ class DnDBot(commands.Bot):
                     "`/clearinitiative` - Clear initiative tracker\n"
                     "`/addchar <name> <hp>` - Add character\n"
                     "`/checkchar <name>` - Check character details"
+                ),
+                inline=False
+            )
+            
+            # DM Commands
+            embed.add_field(
+                name="⚔️ DM Commands (Manage Server permission required)",
+                value=(
+                    "`/dmhp <character> <hp>` - Set character HP\n"
+                    "`/damage <character> <amount>` - Deal damage\n"
+                    "`/heal <character> <amount>` - Heal character\n"
+                    "`/attack <attacker> [target] [bonus] [damage]` - NPC attack\n"
+                    "`/status` - View all character status"
+                ),
+                inline=False
+            )
+            
+            # Campaign Management
+            embed.add_field(
+                name="📝 Campaign Management",
+                value=(
+                    "`/note <title> <content>` - Add campaign note\n"
+                    "`/notes` - View all notes\n"
+                    "`/quest <title> <description> [status]` - Add quest\n"
+                    "`/quests` - View all quests\n"
+                    "`/location <place>` - Set party location\n"
+                    "`/session <name>` - Start new session"
+                ),
+                inline=False
+            )
+            
+            # Inventory
+            embed.add_field(
+                name="🎒 Inventory",
+                value=(
+                    "`/inventory <item> [quantity] [description]` - Add item\n"
+                    "`/bag` - View party inventory"
                 ),
                 inline=False
             )
@@ -79,7 +120,7 @@ class DnDBot(commands.Bot):
                 inline=False
             )
             
-            embed.set_footer(text="Bot created for D&D gameplay and server management")
+            embed.set_footer(text="Enhanced D&D bot with campaign management, combat, and notes!")
             await interaction.response.send_message(embed=embed)
         
         # Sync commands
