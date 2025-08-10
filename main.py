@@ -7,7 +7,6 @@ import os
 from dotenv import load_dotenv
 import logging
 import sys
-import time
 import asyncio
 from flask import Flask
 
@@ -106,6 +105,13 @@ class MyBot(commands.Bot):
         logger.error("Max login attempts reached, exiting")
         raise Exception("Failed to login after max attempts")
 
+    async def close(self):
+        logger.info("Closing bot and cleaning up sessions")
+        await super().close()
+        if self.http.connector is not None:
+            await self.http.connector.close()
+            logger.info("HTTP connector closed")
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -131,6 +137,10 @@ if __name__ == '__main__':
         bot = MyBot.get_instance()
         logger.info(f"Running bot instance {id(bot)}")
         asyncio.run(bot.start_with_retry(TOKEN))
+    except KeyboardInterrupt:
+        logger.info("Received KeyboardInterrupt, shutting down")
+        asyncio.run(bot.close())
     except Exception as e:
         logger.error(f"Failed to run bot: {e}", exc_info=True)
+        asyncio.run(bot.close())
         raise
