@@ -84,7 +84,8 @@ class DnDBot(commands.Bot):
                     "`/quest <title> <description> [status]` - Add quest\n"
                     "`/quests` - View all quests\n"
                     "`/location <place>` - Set party location\n"
-                    "`/session <name>` - Start new session"
+                    "`/session <name>` - Start new session & join voice\n"
+                    "`/leave` - End session & leave voice channel"
                 ),
                 inline=False
             )

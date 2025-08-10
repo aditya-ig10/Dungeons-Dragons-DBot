@@ -207,7 +207,62 @@ async def setup_notes_commands(bot):
         )
         embed.add_field(name="Started by", value=interaction.user.mention, inline=True)
         embed.add_field(name="Started at", value=f"<t:{int(datetime.now().timestamp())}:F>", inline=True)
+        
+        # Try to join voice channel if user is in one
+        voice_status = "Session started!"
+        if interaction.user.voice:
+            try:
+                channel = interaction.user.voice.channel
+                
+                # Check permissions
+                if channel.permissions_for(interaction.guild.me).connect:
+                    # Connect to voice channel
+                    voice_client = interaction.guild.voice_client
+                    if voice_client is None:
+                        await channel.connect()
+                        voice_status = f"Joined {channel.mention} for the session!"
+                    elif voice_client.channel != channel:
+                        await voice_client.move_to(channel)
+                        voice_status = f"Moved to {channel.mention} for the session!"
+                    else:
+                        voice_status = f"Already connected to {channel.mention}"
+                else:
+                    voice_status = "Session started! (No permission to join voice channel)"
+            except Exception as e:
+                voice_status = "Session started! (Couldn't join voice channel)"
+        
+        embed.add_field(name="Voice", value=voice_status, inline=False)
         embed.set_footer(text="Use /note to add session notes!")
+        
+        await interaction.response.send_message(embed=embed)
+    
+    @bot.tree.command(name='leave', description='End session and leave voice channel')
+    async def end_session(interaction: discord.Interaction):
+        """End session and leave voice channel"""
+        voice_client = interaction.guild.voice_client
+        
+        if voice_client is None:
+            embed = discord.Embed(
+                title="🎭 Session Status",
+                description="Not currently connected to a voice channel",
+                color=0x95a5a6
+            )
+        else:
+            try:
+                await voice_client.disconnect()
+                embed = discord.Embed(
+                    title="🎭 Session Ended",
+                    description="Left the voice channel. Session concluded!",
+                    color=0x9b59b6
+                )
+                embed.add_field(name="Ended by", value=interaction.user.mention, inline=True)
+                embed.add_field(name="Ended at", value=f"<t:{int(datetime.now().timestamp())}:F>", inline=True)
+            except Exception as e:
+                embed = discord.Embed(
+                    title="❌ Error",
+                    description="Couldn't leave the voice channel",
+                    color=0xff0000
+                )
         
         await interaction.response.send_message(embed=embed)
     
