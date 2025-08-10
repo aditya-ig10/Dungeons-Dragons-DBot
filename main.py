@@ -1,14 +1,13 @@
+# main.py (for Background Worker)
+import threading
 import discord
 from discord import app_commands
 from discord.ext import commands
-import threading
 import os
 from dotenv import load_dotenv
 import logging
 import sys
 import asyncio
-import random
-from flask import Flask
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,7 +50,6 @@ class MyBot(commands.Bot):
             await self.load_extension('commands.notes_commands')
             await self.load_extension('commands.music_commands')
             await self.load_extension('commands.moderation_commands')
-            await self.load_extension('commands.help_commands')
             logger.info("Extensions loaded successfully")
             await self.tree.sync()
             logger.info("Command tree synced")
@@ -85,7 +83,7 @@ class MyBot(commands.Bot):
                 logger.info(f"Returning existing MyBot instance {id(_bot_instance)}")
             return _bot_instance
 
-    async def start_with_retry(self, token, max_attempts=10, initial_delay=120, backoff_factor=2, jitter=10):
+    async def start_with_retry(self, token, max_attempts=10, initial_delay=60, backoff_factor=2):
         attempt = 1
         delay = initial_delay
         while attempt <= max_attempts:
@@ -95,9 +93,8 @@ class MyBot(commands.Bot):
                 return
             except discord.errors.HTTPException as e:
                 if e.status == 429:
-                    sleep_time = delay + random.uniform(0, jitter)
-                    logger.warning(f"Rate limited, retrying in {sleep_time:.2f} seconds...")
-                    await asyncio.sleep(sleep_time)
+                    logger.warning(f"Rate limited, retrying in {delay} seconds...")
+                    await asyncio.sleep(delay)
                     attempt += 1
                     delay *= backoff_factor
                 else:
@@ -119,27 +116,8 @@ class MyBot(commands.Bot):
         else:
             logger.warning("No HTTP connector to close")
 
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    logger.info("Home endpoint accessed")
-    return "Bot is alive!", 200
-
-@app.route('/health')
-def health():
-    logger.info("Health check accessed")
-    return "OK", 200
-
-def run_flask():
-    logger.info("Starting Flask server")
-    app.run(host='0.0.0.0', port=5000, use_reloader=False)
-
 if __name__ == '__main__':
     logger.info("Starting application")
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
     try:
         bot = MyBot.get_instance()
         logger.info(f"Running bot instance {id(bot)}")

@@ -1,3 +1,4 @@
+# Dockerfile
 FROM python:3.9-slim
 
 # Install FFmpeg and dependencies
@@ -15,8 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application
 COPY . .
 
-# Expose port for Flask
-EXPOSE 5000
-
-# Start the application with gunicorn
-CMD ["gunicorn", "-w", "1", "--timeout", "300", "--bind", "0.0.0.0:5000", "--log-level", "info", "main:app"]
+# Start the application
+CMD ["python", "main.py"]
