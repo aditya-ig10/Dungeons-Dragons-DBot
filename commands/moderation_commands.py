@@ -1,4 +1,5 @@
 # commands/moderation_commands.py
+import logging
 from discord.ext import commands
 import discord
 from discord import app_commands
