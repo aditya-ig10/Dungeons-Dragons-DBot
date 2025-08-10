@@ -1,14 +1,12 @@
-# main.py
+# main.py (for Background Worker)
 import discord
 from discord import app_commands
 from discord.ext import commands
-import threading
 import os
 from dotenv import load_dotenv
 import logging
 import sys
 import asyncio
-from flask import Flask
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,8 +82,9 @@ class MyBot(commands.Bot):
                 logger.info(f"Returning existing MyBot instance {id(_bot_instance)}")
             return _bot_instance
 
-    async def start_with_retry(self, token, max_attempts=5, delay=60):
+    async def start_with_retry(self, token, max_attempts=10, initial_delay=60, backoff_factor=2):
         attempt = 1
+        delay = initial_delay
         while attempt <= max_attempts:
             try:
                 logger.info(f"Login attempt {attempt}/{max_attempts}")
@@ -96,6 +95,7 @@ class MyBot(commands.Bot):
                     logger.warning(f"Rate limited, retrying in {delay} seconds...")
                     await asyncio.sleep(delay)
                     attempt += 1
+                    delay *= backoff_factor
                 else:
                     logger.error(f"Login failed: {e}", exc_info=True)
                     raise
@@ -109,30 +109,14 @@ class MyBot(commands.Bot):
         logger.info("Closing bot and cleaning up sessions")
         await super().close()
         if self.http.connector is not None:
+            logger.info(f"Closing connector: {self.http.connector}")
             await self.http.connector.close()
             logger.info("HTTP connector closed")
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    logger.info("Home endpoint accessed")
-    return "Bot is alive!", 200
-
-@app.route('/health')
-def health():
-    logger.info("Health check accessed")
-    return "OK", 200
-
-def run_flask():
-    logger.info("Starting Flask server")
-    app.run(host='0.0.0.0', port=5000, use_reloader=False)
+        else:
+            logger.warning("No HTTP connector to close")
 
 if __name__ == '__main__':
     logger.info("Starting application")
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
     try:
         bot = MyBot.get_instance()
         logger.info(f"Running bot instance {id(bot)}")
