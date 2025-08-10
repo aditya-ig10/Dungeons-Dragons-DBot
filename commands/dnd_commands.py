@@ -1,137 +1,100 @@
-"""
-D&D related commands: dice rolling, initiative tracking, character management
-"""
+# commands/dnd_commands.py
+from discord.ext import commands
 import discord
 from discord import app_commands
-from discord.ext import commands
-import re
-from utils.dice_parser import DiceParser
+from utils.dice_parser import parse_and_roll
+from utils.data_manager import *
 
-async def setup_dnd_commands(bot):
-    """Setup D&D commands"""
-    
-    @bot.tree.command(name='roll', description='Roll dice using D&D notation (e.g., 2d6+3)')
-    @app_commands.describe(dice='Dice to roll (e.g., 1d20, 2d6+3, 4d6kh3)')
-    async def roll_dice(interaction: discord.Interaction, dice: str):
-        """Roll dice command"""
+class DNDCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="roll", description="Advanced dice rolling with D&D notation")
+    @app_commands.describe(notation="e.g., 2d6+3, 4d6kh3")
+    async def roll(self, interaction: discord.Interaction, notation: str):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
         try:
-            parser = DiceParser()
-            result = parser.parse_and_roll(dice)
-            
-            embed = discord.Embed(
-                title="🎲 Dice Roll",
-                color=0xff6b6b
-            )
-            embed.add_field(name="Roll", value=f"`{dice}`", inline=True)
-            embed.add_field(name="Result", value=f"**{result['total']}**", inline=True)
-            
-            if result['details']:
-                embed.add_field(name="Details", value=result['details'], inline=False)
-            
-            embed.set_footer(text=f"Rolled by {interaction.user.display_name}")
-            
+            total, details = parse_and_roll(notation)
+            embed = discord.Embed(title="Dice Roll", color=discord.Color.blue())
+            embed.add_field(name="Total", value=total, inline=False)
+            for det in details:
+                rolls_str = f"Rolls: {det['rolls']}"
+                if det['kept'] != det['rolls']:
+                    rolls_str += f"\nKept: {det['kept']}"
+                embed.add_field(name=det['expression'], value=rolls_str, inline=True)
             await interaction.response.send_message(embed=embed)
-            
-        except Exception as e:
-            error_embed = discord.Embed(
-                title="❌ Invalid Dice Roll",
-                description=f"Error: {str(e)}\n\nExamples:\n• `1d20` - Roll a d20\n• `2d6+3` - Roll 2d6 and add 3\n• `4d6kh3` - Roll 4d6, keep highest 3",
-                color=0xff0000
-            )
-            await interaction.response.send_message(embed=error_embed)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
 
-    @bot.tree.command(name='initiative', description='Add character to initiative tracker')
-    @app_commands.describe(
-        name='Character name',
-        roll='Initiative roll value'
-    )
-    async def add_initiative(interaction: discord.Interaction, name: str, roll: int):
-        """Add to initiative tracker"""
-        guild_id = interaction.guild.id
-        bot.data_manager.add_initiative(guild_id, name, roll)
-        
-        # Get sorted initiative list
-        initiatives = bot.data_manager.get_initiative_order(guild_id)
-        
-        embed = discord.Embed(
-            title="⚔️ Initiative Tracker",
-            color=0xffd93d
-        )
-        
-        if initiatives:
-            init_list = []
-            for i, (char_name, init_roll) in enumerate(initiatives, 1):
-                init_list.append(f"{i}. **{char_name}** - {init_roll}")
-            
-            embed.description = "\n".join(init_list)
+    @app_commands.command(name="initiative", description="Initiative tracking: add, view, clear")
+    @app_commands.describe(action="add/view/clear", name="Character name (for add)", roll="Roll notation (for add)")
+    async def initiative(self, interaction: discord.Interaction, action: str, name: str = None, roll: str = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+        guild_id = interaction.guild_id
+        if action.lower() == "add":
+            if not name or not roll:
+                await interaction.response.send_message("Provide name and roll notation.", ephemeral=True)
+                return
+            try:
+                iroll, _ = parse_and_roll(roll)
+                add_initiative(guild_id, name, iroll)
+                await interaction.response.send_message(f"Added {name} with initiative {iroll}.")
+            except ValueError as e:
+                await interaction.response.send_message(str(e), ephemeral=True)
+        elif action.lower() == "view":
+            init = get_initiative(guild_id)
+            if not init:
+                await interaction.response.send_message("No initiative order set.")
+                return
+            embed = discord.Embed(title="Initiative Order", color=discord.Color.green())
+            for i, entry in enumerate(init, 1):
+                embed.add_field(name=f"{i}. {entry['name']}", value=entry['roll'], inline=False)
+            await interaction.response.send_message(embed=embed)
+        elif action.lower() == "clear":
+            clear_initiative(guild_id)
+            await interaction.response.send_message("Initiative order cleared.")
         else:
-            embed.description = "No characters in initiative"
-            
-        embed.set_footer(text=f"Added {name} with initiative {roll}")
-        
+            await interaction.response.send_message("Invalid action: use add, view, or clear.", ephemeral=True)
+
+    @app_commands.command(name="addchar", description="Add a character with HP tracking")
+    @app_commands.describe(name="Character name", max_hp="Maximum HP")
+    async def addchar(self, interaction: discord.Interaction, name: str, max_hp: int):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+        try:
+            add_character(interaction.guild_id, name, max_hp)
+            await interaction.response.send_message(f"Added character {name} with {max_hp} HP.")
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+
+    @app_commands.command(name="checkchar", description="View character details and status")
+    @app_commands.describe(name="Character name")
+    async def checkchar(self, interaction: discord.Interaction, name: str):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+        char = get_character(interaction.guild_id, name)
+        if not char:
+            await interaction.response.send_message("Character not found.", ephemeral=True)
+            return
+        embed = discord.Embed(title=f"Character: {name}", color=discord.Color.purple())
+        embed.add_field(name="HP", value=f"{char['hp']}/{char['max_hp']}", inline=False)
         await interaction.response.send_message(embed=embed)
 
-    @bot.tree.command(name='clearinitiative', description='Clear the initiative tracker')
-    async def clear_initiative(interaction: discord.Interaction):
-        """Clear initiative tracker"""
-        guild_id = interaction.guild.id
-        bot.data_manager.clear_initiative(guild_id)
-        
-        embed = discord.Embed(
-            title="⚔️ Initiative Cleared",
-            description="Initiative tracker has been reset",
-            color=0x95a5a6
-        )
-        
+    @app_commands.command(name="help", description="Show bot help with feature categories")
+    async def help(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="D&D Bot Help", description="Commands organized by category", color=discord.Color.green())
+        embed.add_field(name="D&D Commands", value="/roll\n/initiative\n/addchar\n/checkchar", inline=False)
+        embed.add_field(name="DM Commands (Require Manage Server)", value="/dmhp\n/damage\n/heal\n/attack\n/status", inline=False)
+        embed.add_field(name="Campaign Management", value="/note\n/notes\n/quest\n/quests\n/location\n/session\n/leave\n/inventory\n/bag", inline=False)
+        embed.add_field(name="Music Commands", value="/play\n/stop", inline=False)
+        embed.add_field(name="Moderation Commands", value="/ban\n/mute\n/unmute", inline=False)
         await interaction.response.send_message(embed=embed)
 
-    @bot.tree.command(name='addchar', description='Add a character to the database')
-    @app_commands.describe(
-        name='Character name',
-        hp='Character HP'
-    )
-    async def add_character(interaction: discord.Interaction, name: str, hp: int):
-        """Add character to database"""
-        guild_id = interaction.guild.id
-        user_id = interaction.user.id
-        
-        bot.data_manager.add_character(guild_id, user_id, name, hp)
-        
-        embed = discord.Embed(
-            title="📝 Character Added",
-            color=0x2ecc71
-        )
-        embed.add_field(name="Name", value=name, inline=True)
-        embed.add_field(name="HP", value=str(hp), inline=True)
-        embed.add_field(name="Owner", value=interaction.user.mention, inline=True)
-        
-        await interaction.response.send_message(embed=embed)
-
-    @bot.tree.command(name='checkchar', description='Check character details')
-    @app_commands.describe(name='Character name to check')
-    async def check_character(interaction: discord.Interaction, name: str):
-        """Check character details"""
-        guild_id = interaction.guild.id
-        character = bot.data_manager.get_character(guild_id, name)
-        
-        if character:
-            embed = discord.Embed(
-                title="📋 Character Details",
-                color=0x3498db
-            )
-            embed.add_field(name="Name", value=character['name'], inline=True)
-            embed.add_field(name="HP", value=str(character['hp']), inline=True)
-            
-            # Get owner mention
-            owner = bot.get_user(character['owner_id'])
-            if owner:
-                embed.add_field(name="Owner", value=owner.mention, inline=True)
-            
-        else:
-            embed = discord.Embed(
-                title="❌ Character Not Found",
-                description=f"No character named '{name}' found in this server",
-                color=0xff0000
-            )
-        
-        await interaction.response.send_message(embed=embed)
+async def setup(bot):
+    await bot.add_cog(DNDCog(bot))
