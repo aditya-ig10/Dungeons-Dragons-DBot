@@ -1,13 +1,24 @@
-# main.py (for Background Worker)
-import threading
+# main.py
 import discord
 from discord import app_commands
 from discord.ext import commands
+import threading
 import os
 from dotenv import load_dotenv
 import logging
+import sys
+import time
+import asyncio
+from flask import Flask
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('bot.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -26,10 +37,12 @@ class MyBot(commands.Bot):
         intents.members = True
         intents.voice_states = True
         super().__init__(command_prefix='!', intents=intents)
-        logger.info("Initializing MyBot")
+        logger.info(f"Initializing MyBot instance {id(self)}")
         if not hasattr(self, 'tree'):
             self.tree = app_commands.CommandTree(self)
             logger.info("CommandTree initialized")
+        else:
+            logger.warning("CommandTree already exists, skipping initialization")
 
     async def setup_hook(self):
         logger.info("Loading extensions")
@@ -58,7 +71,7 @@ class MyBot(commands.Bot):
         if isinstance(error, app_commands.CheckFailure):
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
         else:
-            logger.error(f"Command tree error: {e}", exc_info=True)
+            logger.error(f"Command tree error: {error}", exc_info=True)
             await interaction.response.send_message("An error occurred.", ephemeral=True)
 
     @classmethod
@@ -69,14 +82,55 @@ class MyBot(commands.Bot):
                 logger.info("Creating new MyBot instance")
                 _bot_instance = cls()
             else:
-                logger.info("Returning existing MyBot instance")
+                logger.info(f"Returning existing MyBot instance {id(_bot_instance)}")
             return _bot_instance
+
+    async def start_with_retry(self, token, max_attempts=5, delay=60):
+        attempt = 1
+        while attempt <= max_attempts:
+            try:
+                logger.info(f"Login attempt {attempt}/{max_attempts}")
+                await self.start(token)
+                return
+            except discord.errors.HTTPException as e:
+                if e.status == 429:
+                    logger.warning(f"Rate limited, retrying in {delay} seconds...")
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                else:
+                    logger.error(f"Login failed: {e}", exc_info=True)
+                    raise
+            except Exception as e:
+                logger.error(f"Login failed: {e}", exc_info=True)
+                raise
+        logger.error("Max login attempts reached, exiting")
+        raise Exception("Failed to login after max attempts")
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    logger.info("Home endpoint accessed")
+    return "Bot is alive!", 200
+
+@app.route('/health')
+def health():
+    logger.info("Health check accessed")
+    return "OK", 200
+
+def run_flask():
+    logger.info("Starting Flask server")
+    app.run(host='0.0.0.0', port=5000, use_reloader=False)
 
 if __name__ == '__main__':
     logger.info("Starting application")
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
     try:
         bot = MyBot.get_instance()
-        bot.run(TOKEN)
+        logger.info(f"Running bot instance {id(bot)}")
+        asyncio.run(bot.start_with_retry(TOKEN))
     except Exception as e:
         logger.error(f"Failed to run bot: {e}", exc_info=True)
         raise
